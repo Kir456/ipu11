@@ -1,5 +1,9 @@
 # secret info
 .env
 
-# heavy files
+# heavy files/weights
 data
+scripts/*.pth
+
+# cache/service info
+scripts/__pycache__

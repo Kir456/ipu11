@@ -86,7 +86,7 @@ def extract_wavlm_embeddings():
                 inputs = {key: val.to(device) for key, val in inputs.items()}
 
                 outputs = model(**inputs)
-                hidden_states = outputs.last_hidden_state  # (1, T, 768)
+                hidden_states = outputs.last_hidden_state
 
                 seq_embedding = hidden_states.squeeze(0).cpu().numpy()
                 np.save(str(output_file), seq_embedding)

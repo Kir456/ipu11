@@ -40,7 +40,6 @@ class StutterDataset(Dataset):
             embedding = np.load(str(embedding_path))
             label = self.df.loc[idx, 'is_stutter']
             
-            # Memory optimization: store as float16 in RAM
             self.data.append(embedding.astype(np.float16))
             self.labels.append(label)
 

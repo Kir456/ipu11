@@ -25,9 +25,6 @@ from utils import (
     compute_metrics, print_metrics, get_project_root
 )
 
-# ============================================================
-# TCN Architecture
-# ============================================================
 
 class ResidualBlock(nn.Module):
     def __init__(self, channels, kernel_size=3, dilation=1, dropout=0.2):
@@ -92,10 +89,6 @@ class StutterTCN(nn.Module):
         return logits
 
 
-# ============================================================
-# Training Loop
-# ============================================================
-
 def train_tcn(args):
     base_dir = get_project_root()
     embeddings_dir = base_dir / "data" / args.embeddings_subdir
@@ -149,7 +142,6 @@ def train_tcn(args):
     optimizer = optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
     scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs, eta_min=1e-6)
 
-    # CRITICAL FIX: Track ROC-AUC instead of F1 to avoid mode collapse
     best_roc_auc = 0.0
     patience_counter = 0
 
@@ -212,7 +204,6 @@ def train_tcn(args):
               f"Loss: {avg_loss:.4f} | LR: {lr:.2e} | ", end="")
         print_metrics(metrics)
 
-        # Evaluate based on ROC-AUC
         current_roc = metrics.get('roc_auc', 0.0)
         
         if current_roc > best_roc_auc:

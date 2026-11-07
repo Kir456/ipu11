@@ -80,7 +80,7 @@ class SequentialDataset(Dataset):
                 skipped += 1
                 continue
 
-            emb = np.load(str(path))  # (T, D)
+            emb = np.load(str(path))
             T, D = emb.shape
 
             if T >= max_seq_len:
@@ -92,7 +92,6 @@ class SequentialDataset(Dataset):
                 mask = np.concatenate([np.ones(T, dtype=np.float32),
                                        np.zeros(pad_len, dtype=np.float32)])
 
-            # Store in float16 to prevent RAM overflow on 16GB systems
             self.data.append(emb_padded.astype(np.float16))
             self.masks.append(mask)
             self.labels.append(df.loc[idx, 'is_stutter'])

@@ -84,10 +84,10 @@ def extract_whisper_embeddings():
                     padding="max_length",
                     max_length=16000 * 30,
                 )
-                input_features = inputs.input_features.to(device)  # (1, 80, 3000)
+                input_features = inputs.input_features.to(device)
 
                 encoder_outputs = model.encoder(input_features)
-                hidden_states = encoder_outputs.last_hidden_state  # (1, T, 768)
+                hidden_states = encoder_outputs.last_hidden_state
 
                 real_duration_s = len(speech_array) / 16000
                 real_frames = int(np.ceil(real_duration_s * 16000 / 320))

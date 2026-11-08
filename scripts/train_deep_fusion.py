@@ -196,7 +196,7 @@ class MultimodalDataset(Dataset):
 
 def train_fusion(args):
     base_dir = get_project_root()
-    save_path = base_dir / "scripts" / "best_deep_fusion.pth"
+    save_path = base_dir / "scripts" / f"best_deep_fusion_{args.encoder_name}.pth"
 
     print("\n" + "=" * 60)
     print("  [INFO] Deep Fusion Training (Audio + Video)")
@@ -341,6 +341,8 @@ def parse_args():
     parser.add_argument('--epochs', type=int, default=50)
     parser.add_argument('--lr', type=float, default=3e-4)
     parser.add_argument('--n_folds', type=int, default=6)
+    parser.add_argument('--encoder_name', type=str, default='whisper',
+                    choices=['wav2vec2', 'wavlm', 'whisper'])
     return parser.parse_args()
 
 

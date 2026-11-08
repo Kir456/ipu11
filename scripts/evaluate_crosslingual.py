@@ -101,10 +101,11 @@ def evaluate_audio_tcn(audio_dir, labels_json, video_list, device, encoder_name=
     return metrics, per_video_results
 
 
-def evaluate_deep_fusion(audio_dir, video_dir, labels_json, video_list, device):
+def evaluate_deep_fusion(audio_dir, video_dir, labels_json, video_list, device, encoder_name='whisper'):
     base_dir = get_project_root()
-    ckpt_path = base_dir / "scripts" / "best_deep_fusion.pth"
-
+    ckpt_path = base_dir / "scripts" / f"best_deep_fusion_{encoder_name}.pth"
+    if not ckpt_path.exists():
+        ckpt_path = base_dir / "scripts" / "best_deep_fusion.pth"
     if not ckpt_path.exists():
         return None, None
 
@@ -242,94 +243,48 @@ def plot_timeline(video_name, labels, probs, threshold=0.5, save_path=None):
 
 def main():
     parser = argparse.ArgumentParser(description="Cross-lingual evaluation on Russian data")
-    parser.add_argument('--russian_audio_dir', type=str, required=True)
-    parser.add_argument('--russian_video_dir', type=str, default=None)
-    parser.add_argument('--labels_json', type=str, required=True)
-    parser.add_argument('--output_dir', type=str, default=None)
+    parser.add_argument('--russian_audio_dir', type=str, default=None,
+                        help="Optional override; by default uses data/russian_seq_<encoder>")
+    parser.add_argument('--russian_video_dir', type=str, default='data/russian_face_kinematics')
+    parser.add_argument('--labels_json', type=str, default='data/russian_labels.json')
+    parser.add_argument('--output_dir', type=str, default='results/plots')
     parser.add_argument('--encoders', type=str, default='wav2vec2,wavlm,whisper')
     args = parser.parse_args()
 
+    base_dir = get_project_root()
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    with open(args.labels_json, 'r') as f:
+    with open(args.labels_json, 'r', encoding='utf-8') as f:
         annotations = json.load(f)
     video_list = sorted(annotations.keys())
 
     print("\n" + "=" * 70)
-    print("  [INFO] Cross-Lingual Validation (RU)")
+    print("  [INFO] Cross-Lingual & Multimodal Validation (RU)")
     print(f"  [INFO] Videos: {len(video_list)}")
     print("=" * 70)
 
     results = []
     all_per_video = {}
 
-    for enc in args.encoders.split(','):
-        enc = enc.strip()
+    for enc in [e.strip() for e in args.encoders.split(',')]:
+        enc_audio_dir = Path(args.russian_audio_dir) if args.russian_audio_dir else (base_dir / "data" / f"russian_seq_{enc}")
+
         print(f"\n[EVAL] Audio TCN ({enc})...")
-        metrics, per_vid = evaluate_audio_tcn(
-            args.russian_audio_dir, args.labels_json, video_list, device, enc
-        )
+        metrics, per_vid = evaluate_audio_tcn(enc_audio_dir, args.labels_json, video_list, device, enc)
         if metrics:
-            metrics['method'] = f'TCN ({enc})'
+            metrics['method'] = f'Audio TCN ({enc})'
             results.append(metrics)
             all_per_video[f'TCN_{enc}'] = per_vid
-            print(f"  ROC-AUC: {metrics['roc_auc']:.4f} | F1: {metrics['f1']:.4f} | "
-                  f"Prec: {metrics['precision']:.4f} | Rec: {metrics['recall']:.4f} | Spec: {metrics['specificity']:.4f}")
-        else:
-            print(f"  [WARN] Model not found")
 
-    if args.russian_video_dir:
-        print(f"\n[EVAL] Deep Fusion (audio + video)...")
-        metrics, per_vid = evaluate_deep_fusion(
-            args.russian_audio_dir, args.russian_video_dir,
-            args.labels_json, video_list, device
-        )
-        if metrics:
-            metrics['method'] = 'Deep Fusion'
-            results.append(metrics)
-            all_per_video['DeepFusion'] = per_vid
-            print(f"  ROC-AUC: {metrics['roc_auc']:.4f} | F1: {metrics['f1']:.4f} | "
-                  f"Prec: {metrics['precision']:.4f} | Rec: {metrics['recall']:.4f} | Spec: {metrics['specificity']:.4f}")
-
-    if results:
-        print("\n" + "=" * 70)
-        print("  [RESULTS] SUMMARY TABLE (Russian Data)")
-        print("=" * 70 + "\n")
-
-        df = pd.DataFrame(results)
-        cols = ['method', 'roc_auc', 'ap', 'f1', 'precision', 'recall', 'specificity']
-        cols = [c for c in cols if c in df.columns]
-        df_disp = df[cols].copy()
-        for c in cols:
-            if c != 'method':
-                df_disp[c] = df_disp[c].apply(lambda x: f"{x:.4f}")
-        print(tabulate(df_disp, headers='keys', tablefmt='grid', showindex=False))
-
-        print("\n  [INFO] Laboratory Baselines (for reference):")
-        print("  Vocametrix:     ROC-AUC=0.701 | F1=0.487 | Prec=0.327 | Rec=0.957 | Spec=0.300")
-        print("  StutterLens:    ROC-AUC=0.632 | F1=0.269 | Prec=0.391 | Rec=0.205 | Spec=0.886")
-        print("  Lab Late Fus.:  ROC-AUC=0.710 | F1=0.282 | Prec=0.504 | Rec=0.195 | Spec=0.929")
-
-        out_path = get_project_root() / "scripts" / "crosslingual_results.csv"
-        df[cols].to_csv(out_path, index=False)
-        print(f"\n  [SAVE] Results saved to: {out_path}")
-
-    if args.output_dir and all_per_video:
-        output_dir = Path(args.output_dir)
-        output_dir.mkdir(parents=True, exist_ok=True)
-        print(f"\n  [INFO] Generating timeline plots...")
-
-        for method_key, per_vid in all_per_video.items():
-            if per_vid is None:
-                continue
-            for vname, data in per_vid.items():
-                plot_path = output_dir / f"timeline_{method_key}_{vname}.png"
-                plot_timeline(
-                    f"{vname} ({method_key})",
-                    data['labels'], data['probs'],
-                    save_path=str(plot_path)
-                )
-        print(f"  [DONE] Plots saved to: {output_dir}")
+        if args.russian_video_dir and Path(args.russian_video_dir).exists():
+            print(f"[EVAL] Deep Fusion ({enc} + Face Kinematics)...")
+            df_metrics, df_per_vid = evaluate_deep_fusion(
+                enc_audio_dir, args.russian_video_dir, args.labels_json, video_list, device, enc
+            )
+            if df_metrics:
+                df_metrics['method'] = f'Deep Fusion ({enc} + Video)'
+                results.append(df_metrics)
+                all_per_video[f'DeepFusion_{enc}'] = df_per_vid
 
 
 if __name__ == "__main__":

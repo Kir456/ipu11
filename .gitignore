@@ -5,5 +5,11 @@
 data
 scripts/*.pth
 
-# cache/service info
+# cache/python logs
 scripts/__pycache__
+
+# report logs
+report/report.aux
+report/report.log
+report/report.toc
+report/report.synctex.gz

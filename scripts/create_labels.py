@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-# Пример разметки в секундах: [начало_сек, конец_сек], видео еще не подготовлены
+# Example in seconds: [start, end]; not prepared
 ANNOTATIONS_SECONDS = {
     "ru_01": [
         [2.4, 4.1],

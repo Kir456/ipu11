@@ -8,7 +8,6 @@ import shutil
 import subprocess
 from pathlib import Path
 
-# Exact intro durations detected by MediaPipe (seconds to cut from start)
 CUT_OFFSETS = {
     "ru_01": 6.0,
     "ru_02": 5.0,
@@ -18,7 +17,6 @@ CUT_OFFSETS = {
     "ru_06": 6.0,
 }
 
-# Raw detected intervals from inspect script
 RAW_INTERVALS = {
     "ru_01": [[7.0, 12.0], [16.5, 27.0], [30.5, 41.0], [47.0, 49.0]],
     "ru_02": [[4.5, 9.0], [10.5, 45.5], [47.5, 78.0], [83.5, 120.5]],
@@ -53,7 +51,6 @@ def main():
         out_video = video_dir / f"{stem}.mp4"
         out_audio = audio_dir / f"{stem}.wav"
 
-        # Frame-accurate cut with fast re-encoding
         cmd_video = [
             "ffmpeg", "-y", "-ss", str(offset), "-i", str(src_video),
             "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
@@ -61,7 +58,6 @@ def main():
         ]
         subprocess.run(cmd_video, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
-        # 16kHz mono WAV for transformer encoders
         cmd_audio = [
             "ffmpeg", "-y", "-ss", str(offset), "-i", str(src_video),
             "-vn", "-acodec", "pcm_s16le", "-ar", "16000", "-ac", "1",

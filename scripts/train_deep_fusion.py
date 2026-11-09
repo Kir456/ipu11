@@ -1,6 +1,6 @@
 """
 Step 4: Deep Fusion - multimodal TCN with early/deep audio-visual fusion.
-Run: python scripts/train_deep_fusion.py --audio_dir <> --video_dir <> --labels_json <>
+Synchronized label interpolation across 15 FPS video and 50 FPS audio.
 """
 
 import argparse
@@ -118,12 +118,12 @@ class DeepFusionTCN(nn.Module):
 
 class MultimodalDataset(Dataset):
     def __init__(self, video_list, audio_dir, video_dir, labels_json,
-                 target_len=450, stride=150, desc="Loading"):
+                 target_len=150, stride=50, desc="Loading"):
         self.data_audio, self.data_video, self.labels, self.masks = [], [], [], []
         audio_dir = Path(audio_dir)
         video_dir = Path(video_dir)
 
-        with open(labels_json, 'r') as f:
+        with open(labels_json, 'r', encoding='utf-8') as f:
             annotations = json.load(f)
 
         for vname in tqdm(video_list, desc=f"[{desc}]", leave=False):
@@ -136,19 +136,27 @@ class MultimodalDataset(Dataset):
             audio_feat = np.load(str(audio_path))
             video_feat = np.load(str(video_path))
 
+            orig_v_len = video_feat.shape[0]
+            raw_labels = np.zeros(orig_v_len, dtype=np.float32)
+            if vname in annotations:
+                for start, end in annotations[vname]:
+                    raw_labels[max(0, int(start)):min(orig_v_len, int(end))] = 1.0
+
             T_target = max(audio_feat.shape[0], video_feat.shape[0])
             if audio_feat.shape[0] != T_target:
                 audio_feat = self._resample(audio_feat, T_target)
+
             if video_feat.shape[0] != T_target:
                 video_feat = self._resample(video_feat, T_target)
+                x_src = np.linspace(0, 1, orig_v_len)
+                x_tgt = np.linspace(0, 1, T_target)
+                interp_labels = np.interp(x_tgt, x_src, raw_labels)
+                frame_labels = (interp_labels >= 0.5).astype(np.float32)
+            else:
+                frame_labels = raw_labels
 
-            T = audio_feat.shape[0]
-            frame_labels = np.zeros(T, dtype=np.float32)
-            if vname in annotations:
-                for start, end in annotations[vname]:
-                    frame_labels[max(0, int(start)):min(T, int(end))] = 1.0
-
-            for ws in range(0, T, stride):
+            T = T_target
+            for ws in range(0, max(1, T - target_len // 2), stride):
                 we = min(ws + target_len, T)
                 a_seg = audio_feat[ws:we]
                 v_seg = video_feat[ws:we]
@@ -200,13 +208,15 @@ def train_fusion(args):
 
     print("\n" + "=" * 60)
     print("  [INFO] Deep Fusion Training (Audio + Video)")
+    print(f"  [INFO] Encoder: {args.encoder_name}")
+    print(f"  [INFO] Window: {args.window_frames} frames ({args.window_frames/50:.1f}s), Stride: {args.stride_frames} frames")
     print("=" * 60)
 
-    with open(args.labels_json, 'r') as f:
+    with open(args.labels_json, 'r', encoding='utf-8') as f:
         annotations = json.load(f)
 
     if args.patient_map_json:
-        with open(args.patient_map_json, 'r') as f:
+        with open(args.patient_map_json, 'r', encoding='utf-8') as f:
             patient_map = json.load(f)
     else:
         patient_map = {v: v for v in annotations.keys()}
@@ -244,6 +254,7 @@ def train_fusion(args):
         print(f"\n--- Fold {fold+1}/{n_folds} ---")
         train_vids = video_array[train_idx].tolist()
         val_vids = video_array[val_idx].tolist()
+        print(f"  [SPLIT] Train: {train_vids}, Val: {val_vids}")
 
         train_dataset = MultimodalDataset(
             train_vids, audio_dir, video_dir, args.labels_json,
@@ -255,9 +266,6 @@ def train_fusion(args):
             target_len=args.window_frames, stride=args.stride_frames,
             desc=f"F{fold+1} Val"
         )
-
-        if len(train_dataset) == 0 or len(val_dataset) == 0:
-            continue
 
         train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=0)
         val_loader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=False, num_workers=0)
@@ -297,8 +305,11 @@ def train_fusion(args):
                     all_preds.extend((probs > 0.5).float().cpu().numpy())
                     all_true.extend(labels.numpy())
 
-            metrics = compute_metrics(all_true, all_preds, all_probs)
-            current_roc = metrics.get('roc_auc', 0.0)
+            if len(set(all_true)) > 1:
+                metrics = compute_metrics(all_true, all_preds, all_probs)
+                current_roc = metrics.get('roc_auc', 0.0)
+            else:
+                current_roc = 0.5
 
             if current_roc > best_fold_roc:
                 best_fold_roc = current_roc
@@ -308,7 +319,7 @@ def train_fusion(args):
                         'model_state_dict': model.state_dict(),
                         'fold': fold,
                         'epoch': epoch,
-                        'metrics': metrics,
+                        'metrics': compute_metrics(all_true, all_preds, all_probs) if len(set(all_true)) > 1 else {},
                         'audio_dim': audio_dim,
                         'video_dim': video_dim,
                         'hidden_dim': args.hidden_dim,
@@ -318,7 +329,7 @@ def train_fusion(args):
         fold_results.append(best_fold_roc)
 
     print(f"\n{'='*60}")
-    print(f"  [DONE] Deep Fusion training complete")
+    print(f"  [DONE] Deep Fusion training complete ({args.encoder_name})")
     if fold_results:
         print(f"  [RESULTS] Mean ROC-AUC: {np.mean(fold_results):.4f} +/- {np.std(fold_results):.4f}")
         print(f"  [RESULTS] Best ROC-AUC: {best_overall_roc:.4f}")
@@ -333,16 +344,16 @@ def parse_args():
     parser.add_argument('--video_dir', type=str, required=True)
     parser.add_argument('--labels_json', type=str, required=True)
     parser.add_argument('--patient_map_json', type=str, default=None)
-    parser.add_argument('--window_frames', type=int, default=450)
-    parser.add_argument('--stride_frames', type=int, default=150)
+    parser.add_argument('--window_frames', type=int, default=150)
+    parser.add_argument('--stride_frames', type=int, default=50)
     parser.add_argument('--hidden_dim', type=int, default=256)
     parser.add_argument('--modality_dropout', type=float, default=0.2)
-    parser.add_argument('--batch_size', type=int, default=8)
-    parser.add_argument('--epochs', type=int, default=50)
+    parser.add_argument('--batch_size', type=int, default=16)
+    parser.add_argument('--epochs', type=int, default=40)
     parser.add_argument('--lr', type=float, default=3e-4)
-    parser.add_argument('--n_folds', type=int, default=6)
+    parser.add_argument('--n_folds', type=int, default=3)
     parser.add_argument('--encoder_name', type=str, default='whisper',
-                    choices=['wav2vec2', 'wavlm', 'whisper'])
+                        choices=['wav2vec2', 'wavlm', 'whisper'])
     return parser.parse_args()
 
 

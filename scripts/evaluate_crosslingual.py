@@ -344,7 +344,7 @@ def plot_timelines(video_list, gt_dict, per_vid_whisper_df, per_vid_whisper_tcn,
         time_axis = np.arange(len(gt)) / TARGET_FPS
 
         plt.figure(figsize=(12, 3.8))
-        plt.fill_between(time_axis, 0, gt, color='green', alpha=0.25, label='Эталонная разметка (заикание)')
+        plt.fill_between(time_axis, 0, gt, color='green', alpha=0.25, label='Reference labeling (stuttering)')
         if p_tcn is not None:
             plt.plot(time_axis, p_tcn, color='gray', linestyle='--', linewidth=1.2, label='Audio TCN (Whisper)')
         if p_hyb is not None:
@@ -352,10 +352,10 @@ def plot_timelines(video_list, gt_dict, per_vid_whisper_df, per_vid_whisper_tcn,
         if p_df is not None:
             plt.plot(time_axis, p_df, color='royalblue', linewidth=1.8, label='Deep Fusion (Whisper + Video)')
 
-        plt.axhline(0.5, color='crimson', linestyle=':', label='Порог решения (0.5)')
-        plt.title(f"Покадровая детекция заикания: {v}.mp4", fontsize=11, fontweight='bold')
-        plt.xlabel("Время, секунды", fontsize=10)
-        plt.ylabel("Вероятность P(заикание)", fontsize=10)
+        plt.axhline(0.5, color='crimson', linestyle=':', label='Threshold (0.5)')
+        plt.title(f"Frame detection of stuttering: {v}.mp4", fontsize=11, fontweight='bold')
+        plt.xlabel("Time, seconds", fontsize=10)
+        plt.ylabel("Probability P(stuttering)", fontsize=10)
         plt.ylim(-0.05, 1.05)
         plt.xlim(0, time_axis[-1])
         plt.grid(True, linestyle=':', alpha=0.6)
@@ -389,15 +389,15 @@ def main():
     rows = []
 
     rows.append({
-        'Category': 'Лабораторные бейзлайны', 'Model': 'Vocametrix (Audio Wav2Vec2)',
+        'Category': 'Baseline', 'Model': 'Vocametrix (Audio Wav2Vec2)',
         'ROC-AUC': 0.7010, 'AP': None, 'F1': 0.4870, 'Precision': 0.3270, 'Recall': 0.9570, 'Specificity': 0.3000
     })
     rows.append({
-        'Category': 'Лабораторные бейзлайны', 'Model': 'StutterLens (Audio)',
+        'Category': 'Baseline', 'Model': 'StutterLens (Audio)',
         'ROC-AUC': 0.6320, 'AP': None, 'F1': 0.2690, 'Precision': 0.3910, 'Recall': 0.2050, 'Specificity': 0.8860
     })
     rows.append({
-        'Category': 'Лабораторные бейзлайны', 'Model': 'Lab Late Fusion (Vocametrix + FAU)',
+        'Category': 'Baseline', 'Model': 'Lab Late Fusion (Vocametrix + FAU)',
         'ROC-AUC': 0.7100, 'AP': None, 'F1': 0.2820, 'Precision': 0.5040, 'Recall': 0.1950, 'Specificity': 0.9290
     })
 
@@ -405,7 +405,7 @@ def main():
     m_mlp, _ = evaluate_mlp(video_list, gt_dict, base_dir, device)
     if m_mlp:
         rows.append({
-            'Category': 'Одномодальные (Zero-Shot)', 'Model': 'Baseline MLP (Wav2Vec2 Pool)',
+            'Category': 'Unimodal (Zero-Shot)', 'Model': 'Baseline MLP (Wav2Vec2 Pool)',
             'ROC-AUC': m_mlp['roc_auc'], 'AP': m_mlp['ap'], 'F1': m_mlp['f1'],
             'Precision': m_mlp['precision'], 'Recall': m_mlp['recall'], 'Specificity': m_mlp['specificity']
         })
@@ -417,7 +417,7 @@ def main():
         if m:
             all_audio_preds[enc] = p
             rows.append({
-                'Category': 'Одномодальные (Zero-Shot)', 'Model': f'Audio TCN ({enc})',
+                'Category': 'Unimodal (Zero-Shot)', 'Model': f'Audio TCN ({enc})',
                 'ROC-AUC': m['roc_auc'], 'AP': m['ap'], 'F1': m['f1'],
                 'Precision': m['precision'], 'Recall': m['recall'], 'Specificity': m['specificity']
             })
@@ -427,7 +427,7 @@ def main():
     if m_hyb:
         per_vid_hybrid = p_hyb
         rows.append({
-            'Category': 'Одномодальные (Zero-Shot)', 'Model': 'Hybrid TCN+MHA (Whisper)',
+            'Category': 'Unimodal (Zero-Shot)', 'Model': 'Hybrid TCN+MHA (Whisper)',
             'ROC-AUC': m_hyb['roc_auc'], 'AP': m_hyb['ap'], 'F1': m_hyb['f1'],
             'Precision': m_hyb['precision'], 'Recall': m_hyb['recall'], 'Specificity': m_hyb['specificity']
         })
@@ -436,7 +436,7 @@ def main():
     m_face, _ = evaluate_face_tcn(video_list, gt_dict, base_dir, device)
     if m_face:
         rows.append({
-            'Category': 'Визуальная абляция', 'Model': 'Face TCN (42 кинемат. пар.)',
+            'Category': 'Visual Ablation', 'Model': "Face TCN (42 kinametics' pairs)",
             'ROC-AUC': m_face['roc_auc'], 'AP': m_face['ap'], 'F1': m_face['f1'],
             'Precision': m_face['precision'], 'Recall': m_face['recall'], 'Specificity': m_face['specificity']
         })
@@ -448,7 +448,7 @@ def main():
         if m:
             all_fusion_preds[enc] = p
             rows.append({
-                'Category': 'Мультимодальные (Early Fusion)', 'Model': f'Deep Fusion ({enc} + Video)',
+                'Category': 'Multimodal (Early Fusion)', 'Model': f'Deep Fusion ({enc} + Video)',
                 'ROC-AUC': m['roc_auc'], 'AP': m['ap'], 'F1': m['f1'],
                 'Precision': m['precision'], 'Recall': m['recall'], 'Specificity': m['specificity']
             })
@@ -475,7 +475,7 @@ def main():
             f"{r['Specificity']:.4f}" if r['Specificity'] is not None else "---",
         ])
 
-    headers = ["Категория", "Модель", "ROC-AUC", "AP", "F1", "Precision", "Recall", "Specificity"]
+    headers = ["Category", "Model", "ROC-AUC", "AP", "F1", "Precision", "Recall", "Specificity"]
     print("\n" + tabulate(table_data, headers=headers, tablefmt="grid"))
     print(f"\n[DONE] Full benchmark complete! Results saved to: {csv_path}")
 
